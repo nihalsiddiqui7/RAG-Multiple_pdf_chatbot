@@ -40,6 +40,7 @@ def get_qa_chain(vectorstore):
     prompt_template = """
     You are a helpful assistant answering questions from uploaded PDFs.
     Use ONLY the provided context.If you don't know the answer, say you don't know. Do not make up an answer.
+    YOU MUST ALWAYS use the provided context to answer the question. If the question cannot be answered using the provided context, say you don't know.
 
     Context:
     {context}
