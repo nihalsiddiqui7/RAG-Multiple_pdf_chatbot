@@ -39,7 +39,7 @@ def get_vectorstore(text_chunks):
 def get_qa_chain(vectorstore):
     prompt_template = """
     You are a helpful assistant answering questions from uploaded PDFs.
-    Use ONLY the provided context.
+    Use ONLY the provided context.If you don't know the answer, say you don't know. Do not make up an answer.
 
     Context:
     {context}
