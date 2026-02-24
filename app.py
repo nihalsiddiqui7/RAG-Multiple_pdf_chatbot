@@ -101,6 +101,14 @@ def main():
         st.write("### Answer:")
         st.write(result["result"])
 
+        # Show the top 3 retrieved chunks after the answer
+        sources = result.get("source_documents") or []
+        if sources:
+            st.write("### Retrieved Chunks (top 3):")
+            for idx, doc in enumerate(sources[:3], start=1):
+                st.markdown(f"**Chunk {idx}:**")
+                st.write(doc.page_content)
+
     with st.sidebar:
         st.subheader("Upload PDFs")
         pdf_docs = st.file_uploader("Upload PDFs", type=["pdf"], accept_multiple_files=True)
