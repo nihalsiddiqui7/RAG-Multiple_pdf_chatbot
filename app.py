@@ -4,7 +4,11 @@ from PyPDF2 import PdfReader
 from langchain_text_splitters import CharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
-
+from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
+from langchain_core.prompts import PromptTemplate
+from langchain_classic.chains import RetrievalQA
+from langchain_core.prompts import ChatPromptTemplate
+import os
 
 def get_pdf_texts(pdf_docs):
     text = ""
@@ -32,32 +36,82 @@ def get_vectorstore(text_chunks):
 
 
 
+def get_qa_chain(vectorstore):
+    prompt_template = """
+    You are a helpful assistant answering questions from uploaded PDFs.
+    Use ONLY the provided context.
 
+    Context:
+    {context}
+
+    Question:
+    {question}
+
+    Answer:
+    """
+
+    prompt = PromptTemplate(
+        template=prompt_template,
+        input_variables=["context", "question"]
+    )
+
+    # Allow overriding the model via env; default to a broadly supported Inference model
+    model_id = os.getenv("HF_MODEL_ID", "mistralai/Mistral-7B-Instruct-v0.2")
+    api_token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
+
+    if not api_token:
+        st.warning("Set HUGGINGFACEHUB_API_TOKEN in your .env to call Hugging Face Inference.")
+
+    model = HuggingFaceEndpoint(
+        repo_id=model_id,
+        task="text-generation",
+        temperature=0.2,
+        max_new_tokens=512,
+        huggingfacehub_api_token=api_token,
+    )
+
+    chat = ChatHuggingFace(llm=model, verbose=True)
+
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+
+    qa_chain = RetrievalQA.from_chain_type(
+        llm=chat,
+        retriever=retriever,
+        chain_type="stuff",
+        chain_type_kwargs={"prompt": prompt},
+        return_source_documents=True,
+    )
+
+    return qa_chain
 
 def main():
     load_dotenv()
-    st.set_page_config(page_title="Chat With PDFs", page_icon=":books:",layout="centered")
+    st.set_page_config(page_title="Chat With PDFs", page_icon="📚")
 
-    st.header("Chat With PDFs :books:")
-    st.text_input("Ask a question about your PDF")
-    
+    st.header("Chat With PDFs 📚")
+
+    if "qa_chain" not in st.session_state:
+        st.session_state.qa_chain = None
+
+    question = st.text_input("Ask a question about your PDF")
+
+    if question and st.session_state.qa_chain:
+        result = st.session_state.qa_chain.invoke(question)
+        st.write("### Answer:")
+        st.write(result["result"])
+
     with st.sidebar:
-        st.subheader("Your Documents")
-        pdf_docs = st.file_uploader("Upload your PDF files here", type=["pdf"], accept_multiple_files=True)
-        if st.button("Upload"):
+        st.subheader("Upload PDFs")
+        pdf_docs = st.file_uploader("Upload PDFs", type=["pdf"], accept_multiple_files=True)
+
+        if st.button("Process"):
             with st.spinner("Processing..."):
-                #get pdf text
                 raw_text = get_pdf_texts(pdf_docs)
-                
+                chunks = get_text_chunks(raw_text)
+                vectorstore = get_vectorstore(chunks)
+                st.session_state.qa_chain = get_qa_chain(vectorstore)
 
-
-                #create chunks
-                text_chunks = get_text_chunks(raw_text)
-                
-
-                #create vector store
-                vectorstore = get_vectorstore(text_chunks)
-                st.success("PDFs processed successfully!")
+                st.success("Ready to chat!")
 
 
 
